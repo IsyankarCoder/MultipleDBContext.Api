@@ -6,6 +6,7 @@ using MultipleDBContext.Api.DataBase;
 using System.Text.Json.Serialization;
 using MultipleDBContext.Api.Orders;
 using Microsoft.Data.SqlClient;
+using Scalar.AspNetCore;
 
 namespace MultipleDBContext.Api
 {
@@ -30,16 +31,13 @@ namespace MultipleDBContext.Api
 
             var app = builder.Build();
 
-            if (app.Environment.IsDevelopment())
-            {
-                app.MapOpenApi();
-            }
-
-
             app.MapGet("products", async (ProductsDbContext productsContext) =>
             {
                 return Results.Ok(productsContext.Products.Select(d => d.Id).ToArrayAsync());
-            });
+            })
+            .WithName("GetProducts")
+            .WithDescription("Get all product IDs")
+            .WithSummary("Fetch Products");
 
             app.MapPost("orders", async (SubmitOrderRequest request, 
                                          ProductsDbContext productContext,
@@ -74,8 +72,16 @@ namespace MultipleDBContext.Api
                 await ordersContext.SaveChangesAsync();
 
                 return Results.Ok(order);
-            });
+            })
+            .WithName("SubmitOrder")
+            .WithDescription("Submit a new order with product IDs")
+            .WithSummary("Create Order");
 
+            if (app.Environment.IsDevelopment())
+            {
+                app.MapOpenApi();
+                app.MapScalarApiReference();
+            }
 
             Todo[] sampleTodos =
             [
@@ -86,15 +92,22 @@ namespace MultipleDBContext.Api
                 new(5, "Clean the car", DateOnly.FromDateTime(DateTime.Now.AddDays(2)))
             ];
 
-            var todosApi = app.MapGroup("/todos");
+            var todosApi = app.MapGroup("/todos")
+                .WithDescription("Operations related to todos")
+                .WithSummary("Todo Operations");
+
             todosApi.MapGet("/", () => sampleTodos)
-                    .WithName("GetTodos");
+                    .WithName("GetTodos")
+                    .WithDescription("Get all todos")
+                    .WithSummary("Fetch All Todos");
 
             todosApi.MapGet("/{id}", Results<Ok<Todo>, NotFound> (int id) =>
                 sampleTodos.FirstOrDefault(a => a.Id == id) is { } todo
                     ? TypedResults.Ok(todo)
                     : TypedResults.NotFound())
-                .WithName("GetTodoById");
+                .WithName("GetTodoById")
+                .WithDescription("Get a specific todo by ID")
+                .WithSummary("Fetch Todo by ID");
 
             app.Run();
         }
