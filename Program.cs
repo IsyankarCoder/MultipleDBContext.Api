@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using MultipleDBContext.Api.Orders;
 using Microsoft.Data.SqlClient;
 using Scalar.AspNetCore;
+using System.Transactions;
 
 namespace MultipleDBContext.Api
 {
@@ -27,13 +28,14 @@ namespace MultipleDBContext.Api
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
             builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
-            builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn,o=>o.MigrationsHistoryTable(HistoryRepository.DefaultTableName,"MyDemoOrders")));//.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+            builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoOrders")));
 
             var app = builder.Build();
 
             app.MapGet("products", async (ProductsDbContext productsContext) =>
             {
-                return Results.Ok(productsContext.Products.Select(d => d.Id).ToArrayAsync());
+                var productIds = await productsContext.Products.Select(d => d.Id).ToArrayAsync();
+                return Results.Ok(productIds);
             })
             .WithName("GetProducts")
             .WithDescription("Get all product IDs")
@@ -43,35 +45,52 @@ namespace MultipleDBContext.Api
                                          ProductsDbContext productContext,
                                          OrderDbContext ordersContext) =>
             {
-                var products = await productContext.Products.Where(p => request.ProductIds.Contains(p.Id)).AsNoTracking().ToListAsync();
-
-                if(products.Count!= request.ProductIds.Count)
+                // TransactionScope - Her iki DbContext'i aynı transaction'da tut
+                using (var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
                 {
-                    return Results.BadRequest("Some Product is missing");
-                }
-
-               // using var transaction = new SqlTransaction();
-
-                //productContext.Database.UseTransaction(transaction);
-                //ordersContext.Database.UseTransaction(transaction);
-
-                var order = new Order()
-                {
-                    Id = Guid.NewGuid(),
-                    TotalPrice = products.Sum(d => d.Price),
-                    LineItems = products.Select(p => new LineItem
+                    try
                     {
-                        Price = p.Price,
-                        Id = Guid.NewGuid(),
-                        ProductId = p.Id
-                    }).ToList()
-                };
+                        // 1. ProductsDbContext - Tracked (güncellemek için)
+                        var products = await productContext.Products
+                            .Where(p => request.ProductIds.Contains(p.Id))
+                            .ToListAsync(); // Tracked şekilde oku
 
-                ordersContext.Orders.Add(order);
+                        if(products.Count != request.ProductIds.Count)
+                        {
+                            return Results.BadRequest("Some Product is missing");
+                        }
 
-                await ordersContext.SaveChangesAsync();
+                        // Güncelle (örn: Stock azalt veya başka bir property güncelle)
+                        products.ForEach(p => p.Price -= 10);
+                        // Eğer Product'da Stock property'si varsa uncomment et
+                        await productContext.SaveChangesAsync();
 
-                return Results.Ok(order);
+                        // 2. OrderDbContext - Yeni order oluştur
+                        var order = new Order()
+                        {
+                            Id = Guid.NewGuid(),
+                            TotalPrice = products.Sum(d => d.Price),
+                            LineItems = products.Select(p => new LineItem
+                            {
+                                Price = p.Price,
+                                Id = Guid.NewGuid(),
+                                ProductId = p.Id
+                            }).ToList()
+                        };
+
+                        ordersContext.Orders.Add(order);
+                        await ordersContext.SaveChangesAsync();
+
+                        transactionScope.Complete(); // ✅ İkisi de commit
+                        return Results.Ok(order);
+                    }
+                    catch (Exception ex)
+                    {
+                       
+                        // ❌ Hata varsa ikisi de rollback
+                        return Results.BadRequest($"Order creation failed: {ex.Message}");
+                    }
+                }
             })
             .WithName("SubmitOrder")
             .WithDescription("Submit a new order with product IDs")
