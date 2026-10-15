@@ -8,6 +8,7 @@ using MultipleDBContext.Api.Orders;
 using Microsoft.Data.SqlClient;
 using Scalar.AspNetCore;
 using System.Transactions;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace MultipleDBContext.Api
 {
@@ -24,7 +25,7 @@ namespace MultipleDBContext.Api
 
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
-
+            builder.Services.AddDistributedMemoryCache();
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
             builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
@@ -32,14 +33,50 @@ namespace MultipleDBContext.Api
 
             var app = builder.Build();
 
-            app.MapGet("products", async (ProductsDbContext productsContext) =>
+
+            static async Task<Guid[]> GetProductIDs(ProductsDbContext productsDbContext)
             {
-                var productIds = await productsContext.Products.Select(d => d.Id).ToArrayAsync();
-                return Results.Ok(productIds);
+                var productIds = await productsDbContext.Products.Select(d => d.Id).ToArrayAsync();
+                return productIds;
+            }
+
+            app.MapGet("products", async (ProductsDbContext productsContext,IDistributedCache distributedCache) =>
+            {
+                string key = "products";
+                // var productIds = await productsContext.Products.Select(d => d.Id).ToArrayAsync();
+
+                var cacheProuct = await distributedCache.GetOrCreateAsync<Guid[]>(key, async fc =>
+                {
+                    return await GetProductIDs(productsContext);
+                });
+
+                if(cacheProuct is null) { return Results.NotFound(); }  
+
+
+                return Results.Ok(cacheProuct);
             })
             .WithName("GetProducts")
             .WithDescription("Get all product IDs")
             .WithSummary("Fetch Products");
+
+#if DEBUG
+            app.MapGet("cache-lock-test", async (IDistributedCache distributedCache, CancellationToken cancellationToken) =>
+            {
+                var key = $"cache-lock-test:{Guid.NewGuid():N}";
+
+                async Task<Guid[]> TestFactory(CancellationToken token)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), token);
+                    return [Guid.NewGuid()];
+                }
+
+                var firstRequest = distributedCache.GetOrCreateAsync<Guid[]>(key, TestFactory, cancellationToken: cancellationToken);
+                var secondRequest = distributedCache.GetOrCreateAsync<Guid[]>(key, TestFactory, cancellationToken: cancellationToken);
+                var results = await Task.WhenAll(firstRequest, secondRequest);
+
+                return Results.Ok(new { key, results });
+            });
+#endif
 
             app.MapPost("orders", async (SubmitOrderRequest request, 
                                          ProductsDbContext productContext,
