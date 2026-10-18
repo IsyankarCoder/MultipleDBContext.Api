@@ -9,6 +9,7 @@ using Microsoft.Data.SqlClient;
 using Scalar.AspNetCore;
 using System.Transactions;
 using Microsoft.Extensions.Caching.Distributed;
+using MultipleDBContext.Api.Caching;
 
 namespace MultipleDBContext.Api
 {
@@ -26,6 +27,8 @@ namespace MultipleDBContext.Api
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
             builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddSingleton<ICacheService, CacheService>();
+
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
             builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
@@ -39,6 +42,25 @@ namespace MultipleDBContext.Api
                 var productIds = await productsDbContext.Products.Select(d => d.Id).ToArrayAsync();
                 return productIds;
             }
+
+
+            app.MapGet("products-cache", async (ProductsDbContext productsDbContest, 
+                                                ICacheService _cacheService,
+                                                CancellationToken token = default) =>
+            {
+                var key = "prod_cache";
+                Guid[]? prodResponse = await _cacheService.GetAsync<Guid[]>(key, token);
+                if (prodResponse != null)
+                {
+                    return Results.Ok(prodResponse);
+                }
+
+                Guid[] dbRec = await GetProductIDs(productsDbContest);
+
+                await _cacheService.SetAsync<Guid[]>(key, dbRec, token);
+
+                return Results.Ok(dbRec);
+            });
 
             app.MapGet("products", async (ProductsDbContext productsContext,IDistributedCache distributedCache) =>
             {
