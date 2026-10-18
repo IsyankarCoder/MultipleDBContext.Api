@@ -12,6 +12,9 @@ namespace MultipleDBContext.Api.Caching
         {
             _distributedCache = distributedCache;
         }
+
+
+        
         public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
         {
             string? cachedValue = await _distributedCache.GetStringAsync(key, cancellationToken);
@@ -55,6 +58,21 @@ namespace MultipleDBContext.Api.Caching
             await _distributedCache.SetStringAsync(key, cachedValue, cancellationToken);
 
             CacheKeys.TryAdd(key, false);
+        }
+
+        public async Task<T> GetAsync<T>(string key, Func<Task<T>> factory, CancellationToken cancellationToken = default)
+            where T : class
+        {
+            T? cachedValue = await GetAsync<T>(key, cancellationToken);
+            if (cachedValue is not null)
+            {
+                return cachedValue;
+            }
+
+            cachedValue = await factory();
+
+            return cachedValue;
+
         }
     }
 }

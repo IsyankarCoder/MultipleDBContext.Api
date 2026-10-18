@@ -43,6 +43,21 @@ namespace MultipleDBContext.Api
                 return productIds;
             }
 
+            app.MapGet("products-cache2", async (ProductsDbContext productsDbContest,
+                                                ICacheService _cacheService,
+                                                CancellationToken token = default) =>
+            {
+                var key = "prod_cache2";
+                Guid[]? prodResponse = await _cacheService.GetAsync<Guid[]>(key, async () =>
+                {
+                    var result = await GetProductIDs(productsDbContest);
+                    await _cacheService.SetAsync<Guid[]>(key, result, token);
+                    return result;
+
+                }, token);
+
+                return Results.Ok(prodResponse);
+            });
 
             app.MapGet("products-cache", async (ProductsDbContext productsDbContest, 
                                                 ICacheService _cacheService,
