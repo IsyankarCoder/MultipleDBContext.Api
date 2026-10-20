@@ -1,15 +1,17 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
-using MultipleDBContext.Api.Contracts;
-using MultipleDBContext.Api.DataBase;
-using System.Text.Json.Serialization;
-using MultipleDBContext.Api.Orders;
-using Microsoft.Data.SqlClient;
-using Scalar.AspNetCore;
-using System.Transactions;
 using Microsoft.Extensions.Caching.Distributed;
 using MultipleDBContext.Api.Caching;
+using MultipleDBContext.Api.Contracts;
+using MultipleDBContext.Api.DataBase;
+using MultipleDBContext.Api.Orders;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
+using System.Transactions;
 
 namespace MultipleDBContext.Api
 {
@@ -27,6 +29,11 @@ namespace MultipleDBContext.Api
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
             builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddStackExchangeRedisCache(d =>
+            {
+                d.Configuration = builder.Configuration.GetConnectionString("Redis");
+
+            });
             builder.Services.AddSingleton<ICacheService, CacheService>();
 
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -43,7 +50,22 @@ namespace MultipleDBContext.Api
                 return productIds;
             }
 
-            app.MapGet("products-cache2", async (ProductsDbContext productsDbContest,
+            app.MapGet("rediscache2", async (ProductsDbContext productsDbContest,
+                                               IDistributedCache _distributedCache,
+                                               CancellationToken token = default) =>
+            {
+                var key = "rediscache2";
+                var result = await GetProductIDs(productsDbContest);
+                string cachedValue = JsonConvert.SerializeObject(result, Formatting.Indented);
+                await _distributedCache.SetStringAsync(key, cachedValue,
+                                                        new DistributedCacheEntryOptions() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) },
+                                                        token);
+
+                return Results.Ok(result);
+            });
+
+
+             app.MapGet("products-cache2", async (ProductsDbContext productsDbContest,
                                                 ICacheService _cacheService,
                                                 CancellationToken token = default) =>
             {
