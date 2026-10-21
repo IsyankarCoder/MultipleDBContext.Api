@@ -17,7 +17,7 @@ namespace MultipleDBContext.Api.DataBase
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasDefaultSchema("MyDemoCustomers");
-            modelBuilder.ApplyConfiguration(new CustomerConfiguration());
+            modelBuilder.ApplyConfiguration(new CustomerConfiguration2());
             base.OnModelCreating(modelBuilder);
         }
 

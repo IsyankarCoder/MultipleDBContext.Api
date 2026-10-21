@@ -59,4 +59,29 @@ namespace MultipleDBContext.Api.Customers
             builder.Navigation(c => c.Address).IsRequired();
         }
     }
+
+    public sealed class CustomerConfiguration2 :
+        IEntityTypeConfiguration<Customer>
+    {
+        public void Configure(EntityTypeBuilder<Customer> builder)
+        {
+
+            builder.HasKey(c => c.Id);
+            builder.Property(u => u.Name).HasMaxLength(200).HasColumnName("CustomerName");
+
+            builder.ComplexProperty(c => c.Address, address =>
+            {
+                address.Property(a => a.Street).HasMaxLength(150).IsRequired();
+                address.Property(a => a.City).HasMaxLength(50).IsRequired();
+                address.Property(a => a.PostalCode).HasMaxLength(20).IsRequired();
+                address.Property(a => a.Country).HasMaxLength(100).IsRequired();
+
+                address.ComplexProperty(d => d.Coordinates, coord =>
+                {
+                    coord.Property(f => f.Latitude).HasColumnName("Latitudessss");
+                    coord.Property(f => f.Longitude).HasColumnName("Longtitudessss");
+                });
+            });
+        }
+    }
 }

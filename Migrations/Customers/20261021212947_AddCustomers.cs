@@ -20,13 +20,13 @@ namespace MultipleDBContext.Api.Migrations.Customers
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    Address_Street = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    Address_City = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Address_PostalCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    CustomerName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Address_City = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     Address_Country = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Address_Coordinates_Latitude = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: false),
-                    Address_Coordinates_Longitude = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: false)
+                    Address_PostalCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Address_Street = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Latitudessss = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Longtitudessss = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>
                 {
