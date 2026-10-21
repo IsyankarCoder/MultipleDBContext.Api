@@ -40,6 +40,7 @@ namespace MultipleDBContext.Api
 
             builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
             builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoOrders")));
+            builder.Services.AddDbContext<CustomerDBContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoCustomers")));
 
             var app = builder.Build();
 

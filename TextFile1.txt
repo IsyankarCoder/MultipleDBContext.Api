@@ -1,0 +1,3 @@
+dotnet ef migrations add AddCustomers --context CustomerDBContext --output-dir Migrations/Customers
+dotnet ef database update --context CustomerDBContext
+dotnet tool update --global dotnet-ef --version 10.0.13
