@@ -7,6 +7,7 @@ using MultipleDBContext.Api.Caching;
 using MultipleDBContext.Api.Contracts;
 using MultipleDBContext.Api.DataBase;
 using MultipleDBContext.Api.Orders;
+using MultipleDBContext.Api.Shipments;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Scalar.AspNetCore;
@@ -41,6 +42,7 @@ namespace MultipleDBContext.Api
             builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
             builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoOrders")));
             builder.Services.AddDbContext<CustomerDBContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoCustomers")));
+            builder.Services.AddDbContext<ShipmentDbContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoShipments")));
 
             var app = builder.Build();
 
@@ -50,6 +52,41 @@ namespace MultipleDBContext.Api
                 var productIds = await productsDbContext.Products.Select(d => d.Id).ToArrayAsync();
                 return productIds;
             }
+
+
+
+            app.MapGet("AddShipment", async (ShipmentDbContext shipmentDb, CancellationToken token) =>
+            {
+                Shipment entity = new Shipment()
+                {
+                    ShipmentNumber = "001",
+                    Shipping = new ShippingDetails()
+                    {
+                        City = "Samsun",
+                        Country = "Türkiye",
+                        Recipient = "Volkan",
+                        TrackingNumber = "55-001"
+                    },
+                    CreatedAt = DateTime.Now,
+                    Notes = new List<ShipmentNote>
+                       {
+                           new ShipmentNote(
+                             "Bunu yazan tosun okuayna kosun",
+                             DateTime.Now),
+
+                              new ShipmentNote(
+                             "Hasan yazan tosun",
+                             DateTime.Now)
+
+                       }
+
+                };
+
+                shipmentDb.Shipments.Add(entity);
+
+                await shipmentDb.SaveChangesAsync();
+            });
+
 
             app.MapGet("rediscache2", async (ProductsDbContext productsDbContest,
                                                IDistributedCache _distributedCache,
