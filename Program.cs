@@ -54,6 +54,21 @@ namespace MultipleDBContext.Api
             }
 
 
+            app.MapGet("Shipments", async (ShipmentDbContext shipmentDb, CancellationToken token) =>
+            {
+                var shipment = await shipmentDb.Shipments.AsNoTracking().Where(d => d.Shipping.City == "Samsun")
+                .Select(o => new { o.Id,o.ShipmentNumber, o.Shipping }).ToListAsync();
+                return Results.Ok(shipment);
+
+            });
+
+            app.MapPut("Shipments/{Id}", async (int Id, ShipmentDbContext shipmentDb, CancellationToken token) =>
+            {
+                var shipment = await shipmentDb.Shipments.SingleAsync(c => c.Id == Id);
+                shipment.Shipping = shipment.Shipping with { TrackingNumber = "D0-555" };
+                await shipmentDb.SaveChangesAsync();
+                return Results.Ok();
+            });
 
             app.MapGet("AddShipment", async (ShipmentDbContext shipmentDb, CancellationToken token) =>
             {

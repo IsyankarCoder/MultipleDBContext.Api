@@ -49,6 +49,11 @@ namespace MultipleDBContext.Api.DataBase
                 builder.OwnsMany(g => g.Notes, notes => notes.ToJson());
             });
 
+            modelBuilder.Entity<Shipment>()
+                       .HasIndex(o => new { o.ShipmentNumber, o.CreatedAt })
+        .HasDatabaseName("IX_Shipment_Status_CreatedAtUtc");
+
+
             base.OnModelCreating(modelBuilder);
         }
     }

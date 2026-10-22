@@ -41,9 +41,12 @@ namespace MultipleDBContext.Api.Migrations.Shipments
 
                     b.Property<string>("ShipmentNumber")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ShipmentNumber", "CreatedAt")
+                        .HasDatabaseName("IX_Shipment_Status_CreatedAtUtc");
 
                     b.ToTable("Shipments");
                 });
