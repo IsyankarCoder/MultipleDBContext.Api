@@ -19,7 +19,7 @@ namespace MultipleDBContext.Api.DataBase
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasDefaultSchema("MyDemoProducts");
-            modelBuilder.Entity<Product>().HasData(SeedProducts);
+            //modelBuilder.Entity<Product>().HasData(SeedProducts);
             base.OnModelCreating(modelBuilder);
         }
 
@@ -34,7 +34,7 @@ namespace MultipleDBContext.Api.DataBase
             base.OnConfiguring(optionsBuilder);
         }
 
-        private static readonly Product[] SeedProducts =
+       /* private static readonly Product[] SeedProducts =
    {
     new() { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "Product #1", Price = 100 },
     new() { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "Product #2", Price = 1001 },
@@ -46,7 +46,7 @@ namespace MultipleDBContext.Api.DataBase
     new() { Id = Guid.Parse("88888888-8888-8888-8888-888888888888"), Name = "Product #8", Price = 1007 },
     new() { Id = Guid.Parse("99999999-9999-9999-9999-999999999999"), Name = "Product #9", Price = 1008 },
     new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), Name = "Product #10", Price = 1009 }
-};
+};*/
 
     }
 }

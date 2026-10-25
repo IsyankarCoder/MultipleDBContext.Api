@@ -47,7 +47,7 @@ namespace MultipleDBContext.Api
             var app = builder.Build();
 
 
-            static async Task<Guid[]> GetProductIDs(ProductsDbContext productsDbContext)
+            static async Task<long[]> GetProductIDs(ProductsDbContext productsDbContext)
             {
                 var productIds = await productsDbContext.Products.Select(d => d.Id).ToArrayAsync();
                 return productIds;
@@ -123,10 +123,10 @@ namespace MultipleDBContext.Api
                                                 CancellationToken token = default) =>
             {
                 var key = "prod_cache2";
-                Guid[]? prodResponse = await _cacheService.GetAsync<Guid[]>(key, async () =>
+                long[]? prodResponse = await _cacheService.GetAsync<long[]>(key, async () =>
                 {
                     var result = await GetProductIDs(productsDbContest);
-                    await _cacheService.SetAsync<Guid[]>(key, result, token);
+                    await _cacheService.SetAsync<long[]>(key, result, token);
                     return result;
 
                 }, token);
@@ -139,15 +139,15 @@ namespace MultipleDBContext.Api
                                                 CancellationToken token = default) =>
             {
                 var key = "prod_cache";
-                Guid[]? prodResponse = await _cacheService.GetAsync<Guid[]>(key, token);
+                long[]? prodResponse = await _cacheService.GetAsync<long[]>(key, token);
                 if (prodResponse != null)
                 {
                     return Results.Ok(prodResponse);
                 }
 
-                Guid[] dbRec = await GetProductIDs(productsDbContest);
+                long[] dbRec = await GetProductIDs(productsDbContest);
 
-                await _cacheService.SetAsync<Guid[]>(key, dbRec, token);
+                await _cacheService.SetAsync<long[]>(key, dbRec, token);
 
                 return Results.Ok(dbRec);
             });
@@ -157,7 +157,7 @@ namespace MultipleDBContext.Api
                 string key = "products";
                 // var productIds = await productsContext.Products.Select(d => d.Id).ToArrayAsync();
 
-                var cacheProuct = await distributedCache.GetOrCreateAsync<Guid[]>(key, async fc =>
+                var cacheProuct = await distributedCache.GetOrCreateAsync<long[]>(key, async fc =>
                 {
                     return await GetProductIDs(productsContext);
                 });

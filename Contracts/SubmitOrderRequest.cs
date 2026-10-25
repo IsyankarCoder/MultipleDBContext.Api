@@ -2,6 +2,6 @@
 {
     public class SubmitOrderRequest
     {
-        public List<Guid> ProductIds { get; set; } = new();
+        public List<long> ProductIds { get; set; } = new();
     }
 }

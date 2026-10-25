@@ -1,0 +1,43 @@
+;WITH Digits AS
+(
+    SELECT digit
+    FROM (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) AS v(digit)
+),
+Numbers AS
+(
+    SELECT CAST(
+        1
+        + d0.digit
+        + 10 * d1.digit
+        + 100 * d2.digit
+        + 1000 * d3.digit
+        + 10000 * d4.digit
+        + 100000 * d5.digit
+        AS int
+    ) AS n
+    FROM Digits AS d0
+    CROSS JOIN Digits AS d1
+    CROSS JOIN Digits AS d2
+    CROSS JOIN Digits AS d3
+    CROSS JOIN Digits AS d4
+    CROSS JOIN Digits AS d5
+)
+INSERT INTO [MyDemoProducts].[Products]
+(
+    [Name],
+    [Price],
+    [Tags],
+    [Description],
+    [PriceTotal],
+    [CreatedDate],
+    [UpdatedDate]
+)
+SELECT
+    CONCAT(N'Demo Product ', n),
+    CAST(10.00 + (n % 100000) / 100.0 AS decimal(18,2)),
+    CONCAT(N'demo,product-', n % 20),
+    CONCAT(N'Demo ürün açıklaması #', n),
+    CAST((n % 1000 + 1) * (n % 100 + 1) AS decimal(18,2)),
+    DATEADD(DAY, -(n % 365), SYSUTCDATETIME()),
+    SYSUTCDATETIME()
+FROM Numbers;
