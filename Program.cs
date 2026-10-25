@@ -7,6 +7,8 @@ using MultipleDBContext.Api.Caching;
 using MultipleDBContext.Api.Contracts;
 using MultipleDBContext.Api.DataBase;
 using MultipleDBContext.Api.Orders;
+using MultipleDBContext.Api.Request;
+using MultipleDBContext.Api.Response;
 using MultipleDBContext.Api.Shipments;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -132,6 +134,44 @@ namespace MultipleDBContext.Api
                 }, token);
 
                 return Results.Ok(prodResponse);
+            });
+
+            app.MapGet("ProductCursorPagination", async ([AsParameters] ProductRequest request,
+                                                         ProductsDbContext dbContext,
+                                                         CancellationToken token) =>
+            {
+                if (!request.HasValidPaging)
+                {
+                    return Results.BadRequest(
+                        $"Page must be at least 1 and PageSize must be between 1 and {PagedRequest.MaxSize}.");
+                }
+
+                var skip = ((long)request.Page - 1) * request.PageSize;
+                if (skip > int.MaxValue)
+                {
+                    return Results.BadRequest("The requested page is out of range.");
+                }
+
+                var products = await dbContext.Products
+                    .AsNoTracking()
+                    .Where(d => d.Id >= request.Cursor)
+                    .OrderBy(product => product.Id)
+                    //.Skip((int)skip)
+                    .Take(request.PageSize + 1)
+                    .Select(product => new ProductResponse(
+                        product.Id,
+                        product.Name,
+                        product.Price,
+                        product.Tags))
+                    .ToListAsync(token);
+
+                long cursor = products[^1].Id;
+
+                IReadOnlyList<ProductResponse> productResponses = products.Take(request.PageSize).ToList();
+
+                CursorResponse<IReadOnlyList<ProductResponse>> cursorResponse = new CursorResponse<IReadOnlyList<ProductResponse>>(cursor, productResponses);
+                return Results.Ok(cursorResponse);
+
             });
 
             app.MapGet("products-cache", async (ProductsDbContext productsDbContest, 
