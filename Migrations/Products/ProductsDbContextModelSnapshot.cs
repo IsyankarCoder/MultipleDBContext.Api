@@ -40,7 +40,8 @@ namespace MultipleDBContext.Api.Migrations.Products
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -61,6 +62,8 @@ namespace MultipleDBContext.Api.Migrations.Products
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name");
 
                     b.ToTable("Products", "MyDemoProducts");
                 });

@@ -41,7 +41,9 @@ namespace MultipleDBContext.Api
 
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
-            builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts")));
+            builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => {
+                o.CommandTimeout(300);//saniye
+                o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts"); }));
             builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoOrders")));
             builder.Services.AddDbContext<CustomerDBContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoCustomers")));
             builder.Services.AddDbContext<ShipmentDbContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoShipments")));
@@ -135,6 +137,55 @@ namespace MultipleDBContext.Api
 
                 return Results.Ok(prodResponse);
             });
+
+            app.MapGet("ProductPaginationWithFilter", async (string searchTerm, 
+                                                             ILogger<Program> logger,
+                                                             ProductsDbContext dbContext,
+                                                             HttpContext context,
+                                                             CancellationToken token) =>
+
+            
+            {
+
+                var token2 = context.RequestAborted; // Cancellation token ile aynı 
+
+                if (string.IsNullOrEmpty(searchTerm))
+                    return Results.BadRequest("Arama terimi boş olamaz");
+
+                using var registration = token.Register(() =>
+                {
+                    logger.LogInformation("İstemci isteği iptal etti");
+                });
+
+
+                try
+                {
+                    var products = await dbContext
+                                  .Products
+                                  .AsNoTracking()
+                                  .Where(d => d.Name.Contains(searchTerm))
+                                  .Select(g => new ProductResponse
+                                  (g.Id,
+                                       g.Name,
+                                       g.Price,
+                                       g.Tags
+                                  ))
+                                  //.Take(100000)
+                                  .ToListAsync(token);
+
+
+                    return Results.Ok(products);
+                }
+                catch (OperationCanceledException oex) when (token.IsCancellationRequested)
+                {
+                    logger.LogInformation($"Veritabanı sorgu iptal edildi");
+                    throw  ;
+
+                }
+
+            }).WithName("GetProductsWithSearchAndFilter")
+            .WithDescription("Get all product IDs with filters and search")
+            .WithSummary("ProductPaginationWithFilter");
 
             app.MapGet("ProductCursorPagination", async ([AsParameters] ProductRequest request,
                                                          ProductsDbContext dbContext,

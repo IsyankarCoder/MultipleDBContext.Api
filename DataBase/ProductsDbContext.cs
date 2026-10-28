@@ -10,7 +10,7 @@ namespace MultipleDBContext.Api.DataBase
         public ProductsDbContext(DbContextOptions<ProductsDbContext> options)
             : base(options)
         {
-
+             
         }
 
 
@@ -19,7 +19,15 @@ namespace MultipleDBContext.Api.DataBase
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasDefaultSchema("MyDemoProducts");
+
             //modelBuilder.Entity<Product>().HasData(SeedProducts);
+
+            modelBuilder.Entity<Product>(e =>
+            {
+                e.Property(p => p.Name).HasMaxLength(200);
+                e.HasIndex(p => p.Name);
+            });
+           
             base.OnModelCreating(modelBuilder);
         }
 
@@ -30,6 +38,7 @@ namespace MultipleDBContext.Api.DataBase
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            
             //optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
             base.OnConfiguring(optionsBuilder);
         }
