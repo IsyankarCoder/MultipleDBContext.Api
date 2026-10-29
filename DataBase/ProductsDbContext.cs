@@ -27,12 +27,21 @@ namespace MultipleDBContext.Api.DataBase
                 e.Property(p => p.Name).HasMaxLength(200);
                 e.HasIndex(p => p.Name);
             });
-           
+
+
+            modelBuilder.Entity<Product>().ComplexProperty(d => d.Price);
+            modelBuilder.Entity<Product>().ComplexProperty(d => d.TotalPrice);
+            modelBuilder.Entity<Product>().ComplexProperty(d => d.TotalAmount);
+            modelBuilder.Entity<Product>().ComplexProperty(d => d.Amount);
+
+
             base.OnModelCreating(modelBuilder);
         }
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
         {
+            configurationBuilder.Properties<decimal>().HavePrecision(19, 6);
+
             base.ConfigureConventions(configurationBuilder);
         }
 

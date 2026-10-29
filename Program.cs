@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.IdentityModel.Tokens;
 using MultipleDBContext.Api.Caching;
 using MultipleDBContext.Api.Contracts;
 using MultipleDBContext.Api.DataBase;
@@ -13,6 +14,7 @@ using MultipleDBContext.Api.Shipments;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Scalar.AspNetCore;
+using System.Linq.Expressions;
 using System.Text.Json.Serialization;
 using System.Transactions;
 
@@ -138,7 +140,28 @@ namespace MultipleDBContext.Api
                 return Results.Ok(prodResponse);
             });
 
+
+            static Expression<Func<Products.Product,object>> GetSortProperty(string? sortColumn,
+                                                             string? sortOrder)
+            {
+                Expression<Func<Products.Product, object>> keySelector = sortColumn switch
+                {
+                    "name" => product => product.Name,
+                    "sku" => product => product.Sku,
+                    "price" => product => product.Price,
+                    //"currency" => product => product.Price.curre,
+                    _ => product => product.Id
+
+                };
+
+                return keySelector;
+            }
+            
+            
+
             app.MapGet("ProductPaginationWithFilter", async (string searchTerm, 
+                                                             string? sortColumn,
+                                                             string? sortOrder,
                                                              ILogger<Program> logger,
                                                              ProductsDbContext dbContext,
                                                              HttpContext context,
@@ -160,14 +183,25 @@ namespace MultipleDBContext.Api
 
                 try
                 {
-                    var products = await dbContext
+                    IQueryable<Products.Product> productsQuery =  dbContext
                                   .Products
-                                  .AsNoTracking()
+                                  .AsNoTracking();
+                    
+                    if (!string.IsNullOrEmpty(sortOrder) && sortOrder.ToLower() == "desc")
+                    {
+                        productsQuery = productsQuery.OrderByDescending(GetSortProperty(sortColumn,sortOrder));
+                    }
+                    else
+                    {
+                        productsQuery = productsQuery.OrderBy(GetSortProperty(sortColumn, sortOrder));
+                    }
+
+                    var products = await productsQuery
                                   .Where(d => d.Name.Contains(searchTerm))
                                   .Select(g => new ProductResponse
                                   (g.Id,
                                        g.Name,
-                                       g.Price,
+                                       g.Price.Amount,
                                        g.Tags
                                   ))
                                   //.Take(100000)
@@ -212,7 +246,7 @@ namespace MultipleDBContext.Api
                     .Select(product => new ProductResponse(
                         product.Id,
                         product.Name,
-                        product.Price,
+                        product.Price.Amount,
                         product.Tags))
                     .ToListAsync(token);
 
@@ -301,7 +335,7 @@ namespace MultipleDBContext.Api
                         }
 
                         // Güncelle (örn: Stock azalt veya başka bir property güncelle)
-                        products.ForEach(p => p.Price -= 10);
+                        products.ForEach(p => p.Price.Amount -= 10);
                         // Eğer Product'da Stock property'si varsa uncomment et
                         await productContext.SaveChangesAsync();
 
@@ -309,10 +343,10 @@ namespace MultipleDBContext.Api
                         var order = new Order()
                         {
                             Id = Guid.NewGuid(),
-                            TotalPrice = products.Sum(d => d.Price),
+                            TotalPrice = products.Sum(d => d.Price.Amount),
                             LineItems = products.Select(p => new LineItem
                             {
-                                Price = p.Price,
+                                Price = p.Price.Amount,
                                 Id = Guid.NewGuid(),
                                 ProductId = p.Id
                             }).ToList()
