@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MultipleDBContext.Api.Caching;
 using MultipleDBContext.Api.Contracts;
@@ -43,9 +44,19 @@ namespace MultipleDBContext.Api
 
             var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
-            builder.Services.AddDbContext<ProductsDbContext>(d => d.UseSqlServer(conn, o => {
-                o.CommandTimeout(300);//saniye
-                o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts"); }));
+            builder.Services.AddDbContext<ProductsDbContext>(d => {
+                if (builder.Environment.IsDevelopment())
+                {
+                    d.EnableSensitiveDataLogging();
+                }
+                d.UseSqlServer(conn, o =>
+                 {
+
+                     o.CommandTimeout(300);//saniye
+                     o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoProducts");
+                 }).LogTo(Console.WriteLine, LogLevel.Information);
+             });
+
             builder.Services.AddDbContext<OrderDbContext>(d => d.UseSqlServer(conn, o => o.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoOrders")));
             builder.Services.AddDbContext<CustomerDBContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoCustomers")));
             builder.Services.AddDbContext<ShipmentDbContext>(options => options.UseSqlServer(conn, sql => sql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, "MyDemoShipments")));
@@ -148,8 +159,8 @@ namespace MultipleDBContext.Api
                 {
                     "name" => product => product.Name,
                     "sku" => product => product.Sku,
-                    "price" => product => product.Price,
-                    //"currency" => product => product.Price.curre,
+                    "price" => product => product.Price.Amount,
+                    "currencyCode" => product => product.Price.CurrencyCode,
                     _ => product => product.Id
 
                 };
@@ -162,6 +173,7 @@ namespace MultipleDBContext.Api
             app.MapGet("ProductPaginationWithFilter", async (string searchTerm, 
                                                              string? sortColumn,
                                                              string? sortOrder,
+                                                             [AsParameters]ProductRequest request,
                                                              ILogger<Program> logger,
                                                              ProductsDbContext dbContext,
                                                              HttpContext context,
@@ -175,6 +187,10 @@ namespace MultipleDBContext.Api
                 if (string.IsNullOrEmpty(searchTerm))
                     return Results.BadRequest("Arama terimi boş olamaz");
 
+                if (request.Page < 1 || request.PageSize < 1)
+                    return Results.BadRequest("Page yada PageSize boş olamaz");
+
+
                 using var registration = token.Register(() =>
                 {
                     logger.LogInformation("İstemci isteği iptal etti");
@@ -186,7 +202,9 @@ namespace MultipleDBContext.Api
                     IQueryable<Products.Product> productsQuery =  dbContext
                                   .Products
                                   .AsNoTracking();
-                    
+
+                    var skip = checked((request.Page - 1) * request.PageSize);
+
                     if (!string.IsNullOrEmpty(sortOrder) && sortOrder.ToLower() == "desc")
                     {
                         productsQuery = productsQuery.OrderByDescending(GetSortProperty(sortColumn,sortOrder));
@@ -198,10 +216,14 @@ namespace MultipleDBContext.Api
 
                     var products = await productsQuery
                                   .Where(d => d.Name.Contains(searchTerm))
+                                  .Skip(skip)
+                                  .Take(request.PageSize)
                                   .Select(g => new ProductResponse
                                   (g.Id,
                                        g.Name,
                                        g.Price.Amount,
+                                       g.Price.CurrencySymbol,
+                                       g.Price.CurrencyCode,
                                        g.Tags
                                   ))
                                   //.Take(100000)
@@ -247,7 +269,9 @@ namespace MultipleDBContext.Api
                         product.Id,
                         product.Name,
                         product.Price.Amount,
-                        product.Tags))
+                        product.Tags,
+                        product.Price.CurrencySymbol,
+                        product.Price.CurrencyCode))
                     .ToListAsync(token);
 
                 long cursor = products[^1].Id;
