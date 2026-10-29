@@ -214,22 +214,19 @@ namespace MultipleDBContext.Api
                         productsQuery = productsQuery.OrderBy(GetSortProperty(sortColumn, sortOrder));
                     }
 
-                    var products = await productsQuery
-                                  .Where(d => d.Name.Contains(searchTerm))
-                                  .Skip(skip)
-                                  .Take(request.PageSize)
-                                  .Select(g => new ProductResponse
-                                  (g.Id,
-                                       g.Name,
-                                       g.Price.Amount,
-                                       g.Price.CurrencySymbol,
-                                       g.Price.CurrencyCode,
-                                       g.Tags
-                                  ))
-                                  //.Take(100000)
-                                  .ToListAsync(token);
+                    var productsQueryResponse = productsQuery
+                                 .Where(d => d.Name.Contains(searchTerm))
+                                 .Select(g => new ProductResponse
+                                 (g.Id,
+                                      g.Name,
+                                      g.Price.Amount,
+                                      g.Price.CurrencySymbol,
+                                      g.Price.CurrencyCode,
+                                      g.Tags
+                                 ));
 
-
+                    var products = await PagedListResponse<ProductResponse>.CreateAsync(productsQueryResponse, request.Page, request.PageSize, token);
+                    
                     return Results.Ok(products);
                 }
                 catch (OperationCanceledException oex) when (token.IsCancellationRequested)
