@@ -9,6 +9,7 @@ using MultipleDBContext.Api.Caching;
 using MultipleDBContext.Api.Contracts;
 using MultipleDBContext.Api.DataBase;
 using MultipleDBContext.Api.Orders;
+using MultipleDBContext.Api.Products;
 using MultipleDBContext.Api.Request;
 using MultipleDBContext.Api.Response;
 using MultipleDBContext.Api.Shipments;
@@ -152,92 +153,109 @@ namespace MultipleDBContext.Api
             });
 
 
-            static Expression<Func<Products.Product,object>> GetSortProperty(string? sortColumn,
-                                                             string? sortOrder)
+            static Expression<Func<Products.Product, object>> GetSortProperty(string? sortColumn)
             {
-                Expression<Func<Products.Product, object>> keySelector = sortColumn switch
+                return sortColumn?.ToLowerInvariant() switch
                 {
                     "name" => product => product.Name,
                     "sku" => product => product.Sku,
                     "price" => product => product.Price.Amount,
-                    "currencyCode" => product => product.Price.CurrencyCode,
+                    "currencycode" => product => product.Price.CurrencyCode,
                     _ => product => product.Id
-
                 };
-
-                return keySelector;
             }
             
             
 
-            app.MapGet("ProductPaginationWithFilter", async (string searchTerm, 
+            app.MapGet("ProductPaginationWithFilter", async (string? searchTerm,
                                                              string? sortColumn,
                                                              string? sortOrder,
-                                                             [AsParameters]ProductRequest request,
+                                                             [AsParameters] ProductRequest request,
                                                              ILogger<Program> logger,
                                                              ProductsDbContext dbContext,
-                                                             HttpContext context,
                                                              CancellationToken token) =>
-
-            
             {
+                static ResponseModel<PagedListResponse<ProductResponse>> CreateErrorResponse(
+                    string message,
+                    string error) => new()
+                    {
+                        Success = false,
+                        Message = message,
+                        Errors = new List<string> { error }
+                    };
 
-                var token2 = context.RequestAborted; // Cancellation token ile aynı 
-
-                if (string.IsNullOrEmpty(searchTerm))
-                    return Results.BadRequest("Arama terimi boş olamaz");
-
-                if (request.Page < 1 || request.PageSize < 1)
-                    return Results.BadRequest("Page yada PageSize boş olamaz");
-
-
-                using var registration = token.Register(() =>
+                if (string.IsNullOrWhiteSpace(searchTerm))
                 {
-                    logger.LogInformation("İstemci isteği iptal etti");
-                });
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid request.",
+                        "Arama terimi boş olamaz."));
+                }
 
+                if (!request.HasValidPaging)
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid paging parameters.",
+                        $"Page must be at least 1 and PageSize must be between 1 and {PagedRequest.MaxSize}."));
+                }
+
+                var skip = ((long)request.Page - 1) * request.PageSize;
+                if (skip > int.MaxValue)
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid paging parameters.",
+                        "The requested page is out of range."));
+                }
 
                 try
                 {
-                    IQueryable<Products.Product> productsQuery =  dbContext
-                                  .Products
-                                  .AsNoTracking();
+                    var sortProperty = GetSortProperty(sortColumn);
+                    var filteredProducts = dbContext.Products
+                        .AsNoTracking()
+                        .Where(product => product.Name.Contains(searchTerm.Trim()));
 
-                    var skip = checked((request.Page - 1) * request.PageSize);
+                    var orderedProducts = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase)
+                        ? filteredProducts.OrderByDescending(sortProperty).ThenBy(product => product.Id)
+                        : filteredProducts.OrderBy(sortProperty).ThenBy(product => product.Id);
 
-                    if (!string.IsNullOrEmpty(sortOrder) && sortOrder.ToLower() == "desc")
+                    var productsQuery = orderedProducts
+                        .Select(product => new ProductResponse(
+                            product.Id,
+                            product.Name,
+                            product.Price.Amount,
+                            product.Price.CurrencySymbol,
+                            product.Price.CurrencyCode,
+                            product.Tags));
+
+                    var products = await PagedListResponse<ProductResponse>.CreateAsync(
+                        productsQuery,
+                        request.Page,
+                        request.PageSize,
+                        token);
+
+                    return Results.Ok(new ResponseModel<PagedListResponse<ProductResponse>>
                     {
-                        productsQuery = productsQuery.OrderByDescending(GetSortProperty(sortColumn,sortOrder));
-                    }
-                    else
-                    {
-                        productsQuery = productsQuery.OrderBy(GetSortProperty(sortColumn, sortOrder));
-                    }
-
-                    var productsQueryResponse = productsQuery
-                                 .Where(d => d.Name.Contains(searchTerm))
-                                 .Select(g => new ProductResponse
-                                 (g.Id,
-                                      g.Name,
-                                      g.Price.Amount,
-                                      g.Price.CurrencySymbol,
-                                      g.Price.CurrencyCode,
-                                      g.Tags
-                                 ));
-
-                    var products = await PagedListResponse<ProductResponse>.CreateAsync(productsQueryResponse, request.Page, request.PageSize, token);
-                    
-                    return Results.Ok(products);
+                        Data = products,
+                        Message = "Ok",
+                        Success = true
+                    });
                 }
-                catch (OperationCanceledException oex) when (token.IsCancellationRequested)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    logger.LogInformation($"Veritabanı sorgu iptal edildi");
-                    throw  ;
-
+                    throw;
                 }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to retrieve filtered products.");
 
-            }).WithName("GetProductsWithSearchAndFilter")
-            .WithDescription("Get all product IDs with filters and search")
+                    return Results.Json(
+                        CreateErrorResponse(
+                            "An error occurred while retrieving products.",
+                            "An unexpected error occurred."),
+                        statusCode: StatusCodes.Status500InternalServerError);
+                }
+            })
+            .WithName("GetProductsWithSearchAndFilter")
+            .WithDescription("Get paginated products filtered by search term")
             .WithSummary("ProductPaginationWithFilter");
 
             app.MapGet("ProductCursorPagination", async ([AsParameters] ProductRequest request,

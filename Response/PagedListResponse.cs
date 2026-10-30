@@ -24,8 +24,8 @@ namespace MultipleDBContext.Api.Response
 
         public int TotalPage { get; }
 
-        public bool HasNextPage => Page * PageSize < TotalCount;
-        public bool HasPreviousPage => PageSize > 1;
+        public bool HasNextPage => (long)Page * PageSize < TotalCount;
+        public bool HasPreviousPage => Page > 1;
 
 
         public static async Task<PagedListResponse<T>> CreateAsync(IQueryable<T> query, int page, int pageSize,CancellationToken token)
@@ -36,9 +36,11 @@ namespace MultipleDBContext.Api.Response
 
             var items = await query.Skip(skip).Take(pageSize).ToListAsync(token);
 
-            int totalPage = totalCount % pageSize;
+            int remain = totalCount % pageSize;
+            int totalPage = totalCount / pageSize;
+            if (remain > 0) totalPage += 1;
 
-            return new PagedListResponse<T>(items, page, pageSize, totalCount,totalPage);
+            return new PagedListResponse<T>(items, page, pageSize, totalCount, totalPage);
         }
     }
 }
