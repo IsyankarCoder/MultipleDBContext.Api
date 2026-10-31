@@ -1,9 +1,9 @@
 ﻿namespace MultipleDBContext.Api.Request
 {
-    public sealed record ProductRequest 
-        : PagedRequest
+    public sealed record ProductRequest
+        : ListQuery
     {
-         
+         public string? SearchTerm {  get; set; }
     }
 
 }

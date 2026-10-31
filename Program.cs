@@ -164,8 +164,98 @@ namespace MultipleDBContext.Api
                     _ => product => product.Id
                 };
             }
-            
-            
+
+            app.MapGet("ProductPaginationWithFilter2", async (
+                                                           [AsParameters] ProductRequest request,
+                                                           ILogger<Program> logger,
+                                                           ProductsDbContext dbContext,
+                                                           CancellationToken token) =>
+            {
+                static ResponseModel<PagedListResponse<ProductResponse>> CreateErrorResponse(
+                    string message,
+                    string error) => new()
+                    {
+                        Success = false,
+                        Message = message,
+                        Errors = new List<string> { error }
+                    };
+
+                if (string.IsNullOrWhiteSpace(request.SearchTerm))
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid request.",
+                        "Arama terimi boş olamaz."));
+                }
+
+                if (!request.HasValidPaging)
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid paging parameters.",
+                        $"Page must be at least 1 and PageSize must be between 1 and {PagedRequest.MaxSize}."));
+                }
+
+                var skip = ((long)request.Page - 1) * request.PageSize;
+                if (skip > int.MaxValue)
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid paging parameters.",
+                        "The requested page is out of range."));
+                }
+
+                try
+                {
+                    var filteredProducts = dbContext.Products
+                        .AsNoTracking()
+                        .Where(product => product.Name.Contains(request.SearchTerm.Trim()));
+
+                    var productsQuery = filteredProducts
+                        .ApplySort(request.Sort)
+                        .Select(product => new ProductResponse(
+                            product.Id,
+                            product.Name,
+                            product.Price.Amount,
+                            product.Price.CurrencySymbol,
+                            product.Price.CurrencyCode,
+                            product.Tags));
+
+                    var products = await PagedListResponse<ProductResponse>.CreateAsync(
+                        productsQuery,
+                        request.Page,
+                        request.PageSize,
+                        token);
+
+                    return Results.Ok(new ResponseModel<PagedListResponse<ProductResponse>>
+                    {
+                        Data = products,
+                        Message = "Ok",
+                        Success = true
+                    });
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (ArgumentException ex)
+                {
+                    return Results.BadRequest(CreateErrorResponse(
+                        "Invalid sorting parameters.",
+                        ex.Message));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to retrieve filtered products.");
+
+                    return Results.Json(
+                        CreateErrorResponse(
+                            "An error occurred while retrieving products.",
+                            "An unexpected error occurred."),
+                        statusCode: StatusCodes.Status500InternalServerError);
+                }
+            })
+          .WithName("GetProductsWithSearchAndFilter2")
+          .WithDescription("Get paginated products filtered by search term")
+          .WithSummary("ProductPaginationWithFilter2");
+
 
             app.MapGet("ProductPaginationWithFilter", async (string? searchTerm,
                                                              string? sortColumn,
@@ -257,6 +347,7 @@ namespace MultipleDBContext.Api
             .WithName("GetProductsWithSearchAndFilter")
             .WithDescription("Get paginated products filtered by search term")
             .WithSummary("ProductPaginationWithFilter");
+
 
             app.MapGet("ProductCursorPagination", async ([AsParameters] ProductRequest request,
                                                          ProductsDbContext dbContext,
